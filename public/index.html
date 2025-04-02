@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аутентификация</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        .dark {
+            background-color: #333;
+            color: #fff;
+        }
+        
+        .form-container {
+            margin-bottom: 20px;
+        }
+        
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        input, button {
+            padding: 8px;
+            font-size: 16px;
+        }
+        
+        button {
+            cursor: pointer;
+        }
+        
+        .error {
+            color: red;
+        }
+        
+        .success {
+            color: green;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" id="themeToggle">Темная тема</button>
+    
+    <div id="authContainer">
+        <div class="form-container">
+            <h2>Регистрация</h2>
+            <form id="registerForm">
+                <input type="text" id="regUsername" placeholder="Логин" required>
+                <input type="password" id="regPassword" placeholder="Пароль" required>
+                <button type="submit">Зарегистрироваться</button>
+            </form>
+            <p id="regMessage" class="hidden"></p>
+        </div>
+        
+        <div class="form-container">
+            <h2>Вход</h2>
+            <form id="loginForm">
+                <input type="text" id="loginUsername" placeholder="Логин" required>
+                <input type="password" id="loginPassword" placeholder="Пароль" required>
+                <button type="submit">Войти</button>
+            </form>
+            <p id="loginMessage" class="hidden"></p>
+        </div>
+    </div>
+    
+    <div id="profileContainer" class="hidden">
+        <h2>Добро пожаловать, <span id="username"></span>!</h2>
+        <button id="logoutBtn">Выйти</button>
+        <button id="refreshDataBtn">Обновить данные</button>
+        <div id="dataContainer"></div>
+    </div>
+    
+    <script>
+        // Обработка темы
+        let themeToggle = document.getElementById('themeToggle');
+        let body = document.body;
+        
+        function applyTheme() {
+            let isDark = localStorage.getItem('theme') === 'dark';
+            body.classList.toggle('dark', isDark);
+            themeToggle.textContent = isDark ? 'Светлая тема' : 'Темная тема';
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            let isDark = body.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            applyTheme();
+        });
+        
+        applyTheme();
+        
+        // Проверка авторизации при загрузке
+        checkAuth();
+        
+        async function checkAuth() {
+            try {
+                let response = await fetch('/profile');
+                if (response.ok) {
+                    let data = await response.json();
+                    showProfile(data.username);
+                } else {
+                    showAuth();
+                }
+            } catch (error) {
+                console.error('Ошибка проверки авторизации:', error);
+                showAuth();
+            }
+        }
+        
+        function showAuth() {
+            document.getElementById('authContainer').classList.remove('hidden');
+            document.getElementById('profileContainer').classList.add('hidden');
+        }
+        
+        function showProfile(username) {
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('profileContainer').classList.remove('hidden');
+            document.getElementById('username').textContent = username;
+            loadData();
+        }
+        
+        // Обработка форм
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            let username = document.getElementById('regUsername').value;
+            let password = document.getElementById('regPassword').value;
+            
+            try {
+                let response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                let message = document.getElementById('regMessage');
+                message.classList.remove('hidden', 'error', 'success');
+                
+                if (response.ok) {
+                    message.textContent = 'Регистрация успешна! Теперь войдите.';
+                    message.classList.add('success');
+                } else {
+                    let data = await response.json();
+                    message.textContent = data.error || 'Ошибка регистрации';
+                    message.classList.add('error');
+                }
+            } catch (error) {
+                console.error('Ошибка регистрации:', error);
+            }
+        });
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            let username = document.getElementById('loginUsername').value;
+            let password = document.getElementById('loginPassword').value;
+            
+            try {
+                let response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+                
+                let message = document.getElementById('loginMessage');
+                message.classList.remove('hidden', 'error', 'success');
+                
+                if (response.ok) {
+                    message.textContent = 'Вход выполнен успешно!';
+                    message.classList.add('success');
+                    setTimeout(checkAuth, 1000);
+                } else {
+                    let data = await response.json();
+                    message.textContent = data.error || 'Ошибка входа';
+                    message.classList.add('error');
+                }
+            } catch (error) {
+                console.error('Ошибка входа:', error);
+            }
+        });
+        
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                let response = await fetch('/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showAuth();
+                }
+            } catch (error) {
+                console.error('Ошибка выхода:', error);
+            }
+        });
+        
+        // Работа с данными
+        document.getElementById('refreshDataBtn').addEventListener('click', loadData);
+        
+        async function loadData() {
+            try {
+                let response = await fetch('/data', { credentials: 'include' });
+                if (response.ok) {
+                    let data = await response.json();
+                    displayData(data);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+            }
+        }
+        
+        function displayData(data) {
+            let container = document.getElementById('dataContainer');
+            container.innerHTML = `
+                <h3>Данные (источник: ${data.source})</h3>
+                <p>Значение: ${data.data.value}</p>
+                <p>Время генерации: ${new Date(data.data.timestamp).toLocaleString()}</p>
+            `;
+        }
+    </script>
+</body>
+</html>
